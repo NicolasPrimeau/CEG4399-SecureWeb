@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CEG4399 app -- Create Account</title>
+  </head>
+
+  <body>
+    <div style="width:100%;">
+      <a href="/login">Back to Login</a>
+      <div style="width:50%;margin-left:auto;margin-right:auto">
+        <div style="padding:50px">
+          <p style="width:100%;float:left">
+              Username requirements:
+          </p>
+          <ul style="width:100%;float:left">
+              <li>Username must be longer than 5 characters</li>
+          </ul>
+          <p style="width:100%;float:left">
+              Password requirements:
+          </p>
+          <ul style="width:100%;float:left">
+              <li>Longer than 5 characters</li>
+              <li>At least one lower case character</li>
+              <li>At least one upper case character</li>
+              <!-- <li>At least one special character(!,@,#,$,%,^,&,*)</li> -->
+          </ul>
+          <form action="create_account" method="post">
+            <p>
+                {{ email }}
+            </p>
+            <p style="width:40%;float:left">Email:&nbsp</p>
+            <p style="width:60%;float:left">
+              <input type="text" name="Email"></input>
+            </p>
+            <p>
+                {{ user_exists }}
+            </p>
+            <p style="width:40%;float:left">User name:&nbsp</p>
+            <p style="width:60%;float:left">
+              <input value="{{ user_name }}" type="text" name="User"></input>
+            </p>
+            <p>
+                {{ incorrect_password }}
+            </p>
+            <p style="width:40%;float:left">Password:&nbsp</p>
+            <p style="width:60%;float:left">
+              <input type="password" name="Password"></input>
+            </p>
+            <p style="width:40%;float:left">Confirm:&nbsp</p>
+            <p style="width:60%;float:left">
+              <input type="password" name="Confirm_Password"></input>
+            </p>
+            <div style="float:left;width:100%">
+              <p style="margin-right:auto;margin-left:auto;width:30%">
+                <input style="width:100%" type="submit" value="Create Account"></input>
+              </p>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
