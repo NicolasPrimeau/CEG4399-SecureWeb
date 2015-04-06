@@ -4,16 +4,37 @@
 import datetime
 
 from flask import Flask, session, redirect, url_for, escape, render_template, request
+from simplekv.memory import DictStore
+from flask.ext.kvsession import KVSessionExtension
+from datetime import timedelta
+from forms.login_form import LoginForm
+from forms.create_account_form import CreateAccountForm
+from forms.public_key_form import PublicKeyUpload
+from forms.recover_password_form import RecoverPasswordForm
+from forms.parameters_form import ParametersForm
+from forms.update_password_form import UpdatePasswordForm
 
+
+# a DictStore will store everything in memory
+# could try MemcacheStore as well
+store = DictStore()
 
 app = Flask(__name__)
 app.secret_key = 'd"\xdd\x99K9\x89_g\xd5+H\xdf!g\x92\xa4\x89\xdc\'<\x1e\xcd\x14'
 app.config.from_envvar('SESSION_COOKIE_SECURE', True)
+app.debug=False
+
+KVSessionExtension(store, app)
 
 from login import *
 
 _TOKENS = dict()
 _TRIES = dict()
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+    app.permanent_session_lifetime = timedelta(minutes=60)
 
 
 # default index, login page
@@ -28,12 +49,18 @@ def redirect_to_login():
 # login
 @app.route("/login")
 def login_page():
-    return render_template("login.html")
+    form = LoginForm()
+    return render_template("login.html", form=form)
 
 
 # login POST logic
 @app.route("/login", methods=['POST'])
 def login():
+    form = LoginForm(request.form)
+    if not form.validate_on_submit():
+        form = LoginForm()
+        return render_template("login.html", form=form, msg="Form not valid")
+    
     user = dict()
     # data and make sure to strip any accidental blank spaces.
     # Courteous and simple
@@ -53,7 +80,7 @@ def login():
 
     if _TRIES[user['username']]['tries'] >= 30:
         return render_template("login.html", msg="Too many attempts in past 5 minutes, "
-                                                 "try again later", user=user['username'])
+                                                 "try again later", form=form)
 
     if check_user(user):
         _TRIES[user['username']]['tries'] = 0
@@ -61,20 +88,36 @@ def login():
         return redirect(url_for(".logged_in_page"))
     else:
         _TRIES[user['username']]['tries'] += 1
-        return render_template("login.html", msg="Invalid user name or password",user=user['username'])
+        return render_template("login.html", msg="Invalid user name or password", form=form)
 
 
 @app.route("/create_account")
 def create_account_page():
-    return render_template("create_account.html")
+    form = CreateAccountForm()
+    return render_template("create_account.html", form=form)
 
 
 @app.route("/create_account", methods=['POST'])
 def create_account():
+    form = CreateAccountForm(request.form)
+    if not form.validate_on_submit():
+        form = CreateAccountForm()
+        return render_template("create_account.html", form=form, msg="Form not valid")
+    
     user_name = ""
     user_exists = ""
     incorrect_password = ""
     email = ""
+    age = ""
+    name = ""
+
+    if int(request.form['Age']) < 0 or int(request.form['Age'])> 150:
+        age = "Not a valid age"
+    
+    if len(request.form['Name']) > 30:
+        name = request.form['Name'][0:30]
+    else:
+        name = request.form['Name']
 
     # check if email is valid, simple check
     if not any(x == "@" for x in request.form['Email']):
@@ -103,15 +146,18 @@ def create_account():
     if request.form['Password'] != request.form['Confirm_Password']:
         incorrect_password = "Passwords don't match"
 
-    if user_exists != "" or incorrect_password != "" or email != "":
-        return render_template("create_account.html", user_name=user_name, user_exists=user_exists,
-                               incorrect_password=incorrect_password, email=email)
+
+    if user_exists != "" or incorrect_password != "" or email != "" or age != "":
+        return render_template("create_account.html", user_exists=user_exists,
+                               incorrect_password=incorrect_password, age=age, form=form)
     else:
         # Create user
         user = dict()
         user["username"] = request.form['User'].lstrip().rstrip()
         user['password'] = request.form['Password'].lstrip().rstrip()
         user['email'] = request.form['Email'].rstrip().lstrip()
+        user['name'] = name
+        user['age'] = int(request.form['Age'])
 
         token = generate_token(20)
         _TOKENS[token] = {'timestamp': datetime.datetime.now(), 'user': create_password(user)}
@@ -159,25 +205,27 @@ def logged_in_page():
         username = session['username']
         keys = database_wrapper.get_public_keys(username)
         author = "Nicolas Primeau"
-        return render_template("logged_in.html", user=username, author=author, msg="", keys=keys)
+        form = PublicKeyUpload()
+        return render_template("logged_in.html", author=author, msg="", keys=keys, form=form)
     else:
         return redirect("/login")
 
 
 @app.route("/logged_in", methods=['POST'])
 def logged_in():
+    form = PublicKeyUpload()
     if 'username' in session:
         key = request.form['public_key'].lstrip().rstrip()
         msg=""
         author = "Nicolas Primeau"
         username = session['username']
-        if key != "":
+        if key != "" and form.validate_on_submit():
             database_wrapper.store_public_key(key, username)
             msg = "Key saved successfully"
 
         keys = database_wrapper.get_public_keys(username)
 
-        return render_template("logged_in.html", user=username, author=author, msg=msg, keys=keys)
+        return render_template("logged_in.html", form=form, author=author, msg=msg, keys=keys)
     else:
         return redirect("/login")
 
@@ -217,6 +265,52 @@ def forgot_info():
     return redirect(url_for(".email_sent_page", email=request.form['Email']))
 
 
+@app.route("/password_update", methods=['GET'])
+def update_password_page():
+    if 'username' in session:
+        form = UpdatePasswordForm()
+        return render_template("password_update.html", form=form)
+    else:
+        return redirect("/login")
+        
+
+
+@app.route("/password_update", methods=['POST'])
+def update_password():
+    if 'username' in session:
+        form = UpdatePasswordForm()
+        if not form.validate_on_submit():
+            return render_template("password_update.html", form=form, pass_warning="Invalid Form")
+            
+            
+        incorrect_password = ""
+
+        user = dict()
+
+        user['username'] = session['username']
+        user = database_wrapper.get_user_by_username(user['username'])
+        user['password'] = request.form['old_password'].lstrip().rstrip()
+
+        if not check_user(user):
+            incorrect_password = "Old password is incorrect"
+
+        if not check_password(request.form['Password']):
+            incorrect_password = "Password doesn't meet requirements"
+        elif request.form['Password'] != request.form['Confirm_Password']:
+            incorrect_password = "Passwords don't match"
+
+        if incorrect_password != "":
+            return render_template("password_update.html", pass_warning=incorrect_password)
+            
+        user['password'] = request.form['Password'].lstrip().rstrip()
+        
+        change_password(user)
+        return render_template("password_update.html", form=form,
+                                pass_warning="Password successfully changed")
+    else:
+        return redirect("/login") 
+    
+
 @app.route("/timeout")
 def timeout_page():
     return render_template("timeout.html")
@@ -225,6 +319,7 @@ def timeout_page():
 @app.route("/parameters", methods=['GET'])
 def parameters_get():
     if 'username' in session:
+        form = ParametersForm()
         username = session['username']
         user = database_wrapper.get_user_by_username(username)
         if 'name' in user:
@@ -249,7 +344,7 @@ def parameters_get():
                 usernames.append((us, False))
 
 
-        return render_template("parameters.html", name=name, age=age, names=usernames)
+        return render_template("parameters.html", form=form,name=name, age=age, names=usernames)
     else:
         return redirect("/login")
 
@@ -257,6 +352,10 @@ def parameters_get():
 @app.route("/parameters", methods=['POST'])
 def parameters_post():
     if 'username' in session:
+        form = ParametersForm()
+        if not form.validate_on_submit():
+            return render_template("parameters.html",msg="Not valid form", form=form)
+        
         username = session['username']
         user = database_wrapper.get_user_by_username(username)
         user['name'] = request.form['name']
@@ -290,20 +389,21 @@ def parameters_post():
             elif us != username:
                 usernames.append((us, False))
 
-        return render_template("parameters.html", name=user['name'], age=user['age'], names=usernames, msg=msg)
+        return render_template("parameters.html", form=form, name=user['name'], age=user['age'], names=usernames, msg=msg)
 
     else:
         return redirect("/login")
 
 
 def change_password_page():
+    form = RecoverPasswordForm()
     # get token
     token = request.url.split("/")[-1]
     # make sure token exists
     if token in _TOKENS:
         # make sure timeout hasn't been reached
         if _TOKENS[token]['timestamp'] > (datetime.datetime.now()-datetime.timedelta(minutes=15)):
-            return render_template("change_password.html", token=token)
+            return render_template("change_password.html", token=token, form=form)
         else:
             del _TOKENS[token]
             return redirect("/timeout")
@@ -311,6 +411,10 @@ def change_password_page():
 
 
 def change_pass():
+    form = RecoverPasswordForm()
+    if not form.validate_on_submit():
+        return render_template("change_password.html", form=form, pass_warning="Invalid form")
+    
     incorrect_password = ""
 
     if not check_password(request.form['Password']):
@@ -319,7 +423,7 @@ def change_pass():
         incorrect_password = "Passwords don't match"
 
     if incorrect_password != "":
-        return render_template("change_password.html", pass_warning=incorrect_password)
+        return render_template("change_password.html", form=form, pass_warning=incorrect_password)
 
     token = request.url.split("/")[-1]
     user = dict()

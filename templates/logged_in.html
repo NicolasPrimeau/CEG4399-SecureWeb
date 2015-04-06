@@ -20,13 +20,13 @@
         </ul> -->
 
         <p>Submit Public Key:</p>
+        {% from "_formhelpers.html" import render_field %}
         <form style="width:100%;padding-bottom:20px" method="post" action="logged_in">
-            <div style="display:none">
-                <input type="text" name="username" value="{{ user }}">
-            </div>
-            <textarea rows="4" cols="50" name="public_key" style="width:100%"></textarea>
-            <p style="width:100%">Note, if user already has public key as seen below, the key will be updated</p>
-            <input type="submit" value="Submit">
+          <dl>
+            {{ form.hidden_tag() }}
+            {{ render_field(form.public_key) }}
+          </dl>
+          <p><input type=submit value="Submit">
         </form>
 
         <table border="1" style="width:400px">

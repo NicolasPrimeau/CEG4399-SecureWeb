@@ -24,38 +24,31 @@
               <li>At least one upper case character</li>
               <!-- <li>At least one special character(!,@,#,$,%,^,&,*)</li> -->
           </ul>
-          <form action="create_account" method="post">
-            <p>
-                {{ email }}
-            </p>
-            <p style="width:40%;float:left">Email:&nbsp</p>
-            <p style="width:60%;float:left">
-              <input type="text" name="Email"></input>
-            </p>
-            <p>
+          {{ msg }}
+          {% from "_formhelpers.html" import render_field %}
+            <form method=post action="create_account">
+              <dl>
+                {{ form.hidden_tag() }}
+                <p>{{ email }}</p>
+                {{ render_field(form.Email) }}
+                <p>
                 {{ user_exists }}
-            </p>
-            <p style="width:40%;float:left">User name:&nbsp</p>
-            <p style="width:60%;float:left">
-              <input value="{{ user_name }}" type="text" name="User"></input>
-            </p>
-            <p>
-                {{ incorrect_password }}
-            </p>
-            <p style="width:40%;float:left">Password:&nbsp</p>
-            <p style="width:60%;float:left">
-              <input type="password" name="Password"></input>
-            </p>
-            <p style="width:40%;float:left">Confirm:&nbsp</p>
-            <p style="width:60%;float:left">
-              <input type="password" name="Confirm_Password"></input>
-            </p>
-            <div style="float:left;width:100%">
-              <p style="margin-right:auto;margin-left:auto;width:30%">
-                <input style="width:100%" type="submit" value="Create Account"></input>
-              </p>
-            </div>
-          </form>
+                </p>
+                {{ render_field(form.User) }}
+                <p>
+                    {{ incorrect_password }}
+                </p>
+                {{ render_field(form.Password) }}
+                {{ render_field(form.Confirm_Password) }}
+                <p>
+                    {{ age }}
+                </p>
+                {{ render_field(form.Age) }}
+                {{ render_field(form.Name) }}                  
+              </dl>
+              <p><input type=submit value="Create Account">
+            </form>
+
         </div>
       </div>
     </div>
